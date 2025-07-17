@@ -1,0 +1,49 @@
+try:
+    while True:
+        if getTime() - timerServer > TIMEOUT_SERVER:
+            logger.warning(f"Server timeout after {TIMEOUT_SERVER/1000}s")
+            processManager.sendSIGINT()
+            break
+        response = processManager.getMessageFrom(server_commands)
+        if response is not None:
+            logger.info(f"Received server command: {response}")
+            timerServer = getTime()
+            message = None
+            receiver = None
+            try:
+                if response[0] == ServerCommands.Motors.FORWARD:
+                    if len(response) < 2:
+                        logger.error(f"Missing PWM value for FORWARD: {response}")
+                        continue
+                    pwm = int(response[1])
+                    message = [msgCounter, MotorCommands.SET_PWM, pwm, pwm, 0, 0]
+                    receiver = motors
+                    if not send_arduino_command(processManager, receiver, message):
+                        logger.warning("Failed to send FORWARD command")
+                elif response[0] == ServerCommands.Motors.TURN_LEFT:
+                    if len(response) < 2:
+                        logger.error(f"Missing PWM value for TURN_LEFT: {response}")
+                        continue
+                    pwm = int(response[1])
+                    message = [msgCounter, MotorCommands.SET_PWM, pwm, pwm, 0, 1]
+                    receiver = motors
+                    if not send_arduino_command(processManager, receiver, message):
+                        logger.warning("Failed to send TURN_LEFT command")
+                # ... alte comenzi similare
+                elif response[0] == ServerCommands.EXIT:
+                    logger.info("Received EXIT command")
+                    processManager.sendSIGINT()
+                    break
+                elif response[0] in (ServerCommands.AUTONOMOUS, ServerCommands.MANUAL, ServerCommands.KEEP_ALIVE):
+                    logger.info(f"Handled command {response[0]} without Arduino")
+                    if response[0] == ServerCommands.AUTONOMOUS:
+                        carObj.setAutonomous()
+                    elif response[0] == ServerCommands.MANUAL:
+                        carObj.setManual()
+                else:
+                    logger.error(f"Unknown server command: {response}")
+            except (IndexError, ValueError) as e:
+                logger.error(f"Error processing command {response}: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error processing command {response}: {e}")
+            msgCounter = (msgCounter + 1) % 65000
